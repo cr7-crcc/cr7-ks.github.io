@@ -183,6 +183,27 @@ body {
 .hidden { display: none !important; }
 .spacer { height: 24px; }
 
+/* Admin Dashboard */
+.overview-card { flex:1; min-width:100px; background:var(--card); border-radius:var(--radius-sm); padding:16px; text-align:center; box-shadow:var(--shadow); }
+.overview-card .ov-num { font-size:28px; font-weight:700; letter-spacing:-1px; }
+.overview-card .ov-label { font-size:11px; color:var(--text2); margin-top:2px; }
+.bar-wrap { margin-bottom:10px; }
+.bar-label { display:flex; justify-content:space-between; font-size:12px; margin-bottom:2px; }
+.bar-label b { font-size:13px; }
+.bar-track { height:20px; background:#F2F2F7; border-radius:10px; overflow:hidden; position:relative; }
+.bar-fill { height:100%; border-radius:10px; transition:width 0.5s ease; display:flex; align-items:center; padding-left:8px; font-size:11px; font-weight:600; color:#fff; min-width:40px; }
+.dist-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.dist-label { width:60px; font-size:12px; font-weight:600; text-align:right; }
+.dist-track { flex:1; height:24px; background:#F2F2F7; border-radius:6px; overflow:hidden; }
+.dist-fill { height:100%; border-radius:6px; display:flex; align-items:center; padding-left:8px; font-size:11px; color:#fff; font-weight:600; min-width:30px; }
+.dist-count { width:40px; font-size:12px; font-weight:600; }
+.pass-card { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:0.5px solid var(--sep); }
+.pass-card:last-child { border-bottom:none; }
+.pass-ring { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:#fff; flex-shrink:0; }
+.pass-info { flex:1; }
+.pass-name { font-size:14px; font-weight:600; }
+.pass-meta { font-size:11px; color:var(--text2); }
+
 @media (min-width: 480px) {
   body { padding-left: 20px; padding-right: 20px; }
 }
@@ -253,10 +274,30 @@ body {
 
 <!-- Admin Dashboard -->
 <div id="page-admin" class="hidden">
-    <div class="ios-card"><h2>📊 成绩统计面板</h2><p class="subtitle" id="admin-info"></p></div>
-    <div class="ios-card"><h2>按公司统计</h2><div id="chart-company"></div></div>
-    <div class="ios-card"><h2>按项目组统计</h2><div id="chart-project"></div></div>
-    <div class="ios-card"><h2>🏆 个人成绩排行榜</h2><div id="admin-ranking"></div></div>
+    <div class="ios-card" style="text-align:center;">
+        <h2>📊 成绩统计分析</h2>
+        <p class="subtitle" id="admin-info">请先完成考试提交数据</p>
+        <button class="ios-btn ios-btn-ghost" onclick="loadAdminData()" style="margin-top:10px;width:auto;display:inline-block;padding:8px 20px;">🔄 刷新数据</button>
+    </div>
+
+    <!-- Overview Cards -->
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;" id="admin-overview"></div>
+
+    <!-- Company Chart -->
+    <div class="ios-card"><h2>🏢 各公司成绩对比</h2><div id="chart-company"></div></div>
+
+    <!-- Project Chart -->
+    <div class="ios-card"><h2>📋 各项目组成绩对比</h2><div id="chart-project"></div></div>
+
+    <!-- Score Distribution -->
+    <div class="ios-card"><h2>📈 分数段分布</h2><div id="chart-distribution"></div></div>
+
+    <!-- Pass Rate -->
+    <div class="ios-card"><h2>✅ 合格率统计</h2><div id="chart-passrate"></div></div>
+
+    <!-- Individual Rankings -->
+    <div class="ios-card"><h2>🏆 考试成绩排行榜</h2><div id="admin-ranking"></div></div>
+
     <button class="ios-btn ios-btn-ghost" onclick="closeAdmin()" style="margin-bottom:30px;">退出管理</button>
     <div class="spacer"></div>
 </div>
@@ -600,84 +641,99 @@ function closeAdmin() {
 }
 function loadAdminData() {
     document.getElementById('admin-info').textContent = '正在从服务器加载数据...';
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'https://quickform.cn/api/pupffnoouj/all', true);
-    xhr.timeout = 10000;
-    xhr.onload = function() {
-        if (xhr.status === 200) {
-            try {
-                var data = JSON.parse(xhr.responseText);
-                renderAdminDashboard(Array.isArray(data) ? data : (data.data || data.records || []));
-            } catch(e) {
-                document.getElementById('admin-info').textContent = '数据解析失败，请重试';
+    fetch('https://quickform.cn/api/pupffnoouj/all')
+        .then(function(resp) {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
+        })
+        .then(function(data) {
+            var list = Array.isArray(data) ? data : (data.submissions || data.data || data.records || data.list || []);
+            if (list.length === 0) {
+                document.getElementById('admin-info').textContent = '暂无考试数据';
+            } else {
+                renderAdminDashboard(list);
             }
-        } else {
-            document.getElementById('admin-info').textContent = '服务器返回 ' + xhr.status + '，请稍后重试';
-        }
-    };
-    xhr.onerror = function() {
-        document.getElementById('admin-info').textContent = '⚠️ 无法连接服务器，请检查网络后重试';
-    };
-    xhr.ontimeout = function() {
-        document.getElementById('admin-info').textContent = '⚠️ 请求超时，请检查网络后重试';
-    };
-    xhr.send();
+        })
+        .catch(function(e) {
+            document.getElementById('admin-info').textContent = '⚠️ 加载失败: ' + e.message + ' | 请使用服务器方式打开（node start_server.js）';
+        });
 }
 
 function renderAdminDashboard(records) {
-    if (!records.length) {
+    if (!records || !records.length) {
         document.getElementById('admin-info').textContent = '暂无考试数据';
         return;
     }
-    document.getElementById('admin-info').textContent = '共 ' + records.length + ' 条考试记录 | 最近更新: ' + new Date().toLocaleString();
+    var total = records.length;
+    var sumScore = records.reduce(function(s,r){return s+(r.score||0);},0);
+    var avgAll = Math.round(sumScore/total);
+    var passCount = records.filter(function(r){return(r.score||0)>=60;}).length;
+    var passRate = Math.round(passCount/total*100);
+    var maxScore = Math.max.apply(null, records.map(function(r){return r.score||0;}));
+    var minScore = Math.min.apply(null, records.map(function(r){return r.score||0;}));
 
-    // Company stats
+    // Overview cards
+    document.getElementById('admin-info').textContent = '共 ' + total + ' 条考试记录 | ' + new Date().toLocaleString();
+    document.getElementById('admin-overview').innerHTML =
+        '<div class="overview-card"><div class="ov-num" style="color:#007AFF;">'+total+'</div><div class="ov-label">考试总人次</div></div>' +
+        '<div class="overview-card"><div class="ov-num" style="color:'+(avgAll>=70?'#34C759':avgAll>=60?'#FF9500':'#FF3B30')+';">'+avgAll+'</div><div class="ov-label">平均分数</div></div>' +
+        '<div class="overview-card"><div class="ov-num" style="color:'+(passRate>=70?'#34C759':'#FF9500')+';">'+passRate+'%</div><div class="ov-label">整体合格率</div></div>' +
+        '<div class="overview-card"><div class="ov-num" style="color:#007AFF;">'+maxScore+'</div><div class="ov-label">最高分</div></div>';
+
+    // Company chart
     var coMap = {};
-    records.forEach(function(r) {
-        var c = r.company || '未知';
-        if (!coMap[c]) coMap[c] = { total: 0, count: 0, pass: 0 };
-        coMap[c].total += r.score || 0;
-        coMap[c].count++;
-        if ((r.score || 0) >= 60) coMap[c].pass++;
-    });
+    records.forEach(function(r){var c=r.company||'未知';if(!coMap[c])coMap[c]={total:0,count:0,pass:0};coMap[c].total+=r.score||0;coMap[c].count++;if((r.score||0)>=60)coMap[c].pass++;});
+    var coArr = Object.entries(coMap).sort(function(a,b){return(b[1].total/b[1].count)-(a[1].total/a[1].count);});
     var coHtml = '';
-    var maxCount = Math.max.apply(null, Object.values(coMap).map(function(x){return x.count;}));
-    var coEntries = Object.entries(coMap).sort(function(a,b){return (b[1].total/b[1].count) - (a[1].total/a[1].count);});
-    coEntries.forEach(function(e) {
-        var avg = Math.round(e[1].total / e[1].count);
-        var pct = Math.round(e[1].count / maxCount * 100);
-        var passRate = Math.round(e[1].pass / e[1].count * 100);
-        coHtml += '<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;"><span><b>' + e[0] + '</b></span><span>' + e[1].count + '人 | 均分 ' + avg + ' | 合格率 ' + passRate + '%</span></div>';
-        coHtml += '<div style="height:6px;background:#E5E5EA;border-radius:3px;"><div style="height:100%;background:' + (avg>=70?'#34C759':avg>=60?'#FF9500':'#FF3B30') + ';border-radius:3px;width:' + pct + '%;"></div></div></div>';
+    coArr.forEach(function(e){
+        var avg=Math.round(e[1].total/e[1].count), pr=Math.round(e[1].pass/e[1].count*100);
+        var color=avg>=80?'#34C759':avg>=60?'#FF9500':'#FF3B30';
+        coHtml+='<div class="bar-wrap"><div class="bar-label"><b>'+e[0]+'</b><span>'+e[1].count+'人 | 均分 '+avg+' | 合格率 '+pr+'%</span></div><div class="bar-track"><div class="bar-fill" style="width:'+Math.max(avg,15)+'%;background:'+color+';">'+avg+'分</div></div></div>';
     });
-    document.getElementById('chart-company').innerHTML = coHtml;
+    document.getElementById('chart-company').innerHTML=coHtml||'<p style="color:var(--text2);text-align:center;padding:20px;">暂无数据</p>';
 
-    // Project stats
+    // Project chart
     var prMap = {};
-    records.forEach(function(r) {
-        var p = r.project || '未知';
-        if (!prMap[p]) prMap[p] = { total: 0, count: 0, pass: 0 };
-        prMap[p].total += r.score || 0;
-        prMap[p].count++;
-        if ((r.score || 0) >= 60) prMap[p].pass++;
-    });
-    var prEntries = Object.entries(prMap).sort(function(a,b){return b[1].count - a[1].count;});
+    records.forEach(function(r){var p=r.project||'未知';if(!prMap[p])prMap[p]={total:0,count:0,pass:0};prMap[p].total+=r.score||0;prMap[p].count++;if((r.score||0)>=60)prMap[p].pass++;});
+    var prArr = Object.entries(prMap).sort(function(a,b){return b[1].count-a[1].count;});
     var prHtml = '';
-    prEntries.forEach(function(e) {
-        var avg = Math.round(e[1].total / e[1].count);
-        prHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--sep);"><div><b>' + e[0] + '</b></div><div style="font-size:13px;">' + e[1].count + '人 | 均分 ' + avg + ' | 合格率 ' + Math.round(e[1].pass/e[1].count*100) + '%</div></div>';
+    prArr.forEach(function(e){
+        var avg=Math.round(e[1].total/e[1].count), pr=Math.round(e[1].pass/e[1].count*100);
+        var color=avg>=80?'#34C759':avg>=60?'#FF9500':'#FF3B30';
+        prHtml+='<div class="bar-wrap"><div class="bar-label"><b>'+e[0]+'</b><span>'+e[1].count+'人 | 均分 '+avg+' | 合格率 '+pr+'%</span></div><div class="bar-track"><div class="bar-fill" style="width:'+Math.max(avg,15)+'%;background:'+color+';">'+avg+'分</div></div></div>';
     });
-    document.getElementById('chart-project').innerHTML = prHtml || '<p style="color:var(--text2);">暂无数据</p>';
+    document.getElementById('chart-project').innerHTML=prHtml||'<p style="color:var(--text2);text-align:center;padding:20px;">暂无数据</p>';
 
-    // Individual ranking
-    var sorted = records.slice().sort(function(a,b){return (b.score||0)-(a.score||0);});
-    var rankHtml = '';
-    sorted.forEach(function(r,i) {
-        var s = r.score || 0;
-        var sc = s>=60?'good':'ok';
-        rankHtml += '<div class="rank-row"><div class="rank-pos '+(i===0?'gold':i===1?'silver':i===2?'bronze':'')+'">'+(i<=2?['🥇','🥈','🥉'][i]:i+1)+'</div><div class="rank-info"><div class="rank-name">'+(r.name||'?')+'</div><div class="rank-meta">'+(r.company||'')+' · '+(r.project||'')+' | '+(r.time||'')+'</div></div><div class="rank-score '+sc+'">'+s+'分</div></div>';
+    // Score distribution
+    var buckets = {'90-100':0,'80-89':0,'70-79':0,'60-69':0,'40-59':0,'0-39':0};
+    var colors = ['#34C759','#007AFF','#5AC8FA','#FF9500','#FF3B30','#C7C7CC'];
+    records.forEach(function(r){var s=r.score||0;if(s>=90)buckets['90-100']++;else if(s>=80)buckets['80-89']++;else if(s>=70)buckets['70-79']++;else if(s>=60)buckets['60-69']++;else if(s>=40)buckets['40-59']++;else buckets['0-39']++;});
+    var maxB = Math.max.apply(null,Object.values(buckets))||1;
+    var distHtml = '';
+    var keys = Object.keys(buckets);
+    keys.forEach(function(k,i){
+        var v=buckets[k],pct=Math.round(v/maxB*100);
+        distHtml+='<div class="dist-bar"><div class="dist-label">'+k+'</div><div class="dist-track"><div class="dist-fill" style="width:'+Math.max(pct,8)+'%;background:'+colors[i]+';">'+(v>0?v+'人':'')+'</div></div><div class="dist-count">'+v+'人</div></div>';
     });
-    document.getElementById('admin-ranking').innerHTML = rankHtml || '<p style="color:var(--text2);">暂无数据</p>';
+    document.getElementById('chart-distribution').innerHTML=distHtml;
+
+    // Pass rate by company
+    var passHtml = '';
+    coArr.forEach(function(e){
+        var pr=Math.round(e[1].pass/e[1].count*100);
+        var bg=pr>=80?'#34C759':pr>=60?'#FF9500':'#FF3B30';
+        passHtml+='<div class="pass-card"><div class="pass-ring" style="background:'+bg+';">'+pr+'%</div><div class="pass-info"><div class="pass-name">'+e[0]+'</div><div class="pass-meta">'+e[1].pass+'/'+e[1].count+' 人合格</div></div><div style="font-size:20px;">'+(pr>=80?'✅':pr>=60?'⚠️':'❌')+'</div></div>';
+    });
+    document.getElementById('chart-passrate').innerHTML=passHtml||'<p style="color:var(--text2);text-align:center;padding:20px;">暂无数据</p>';
+
+    // Individual rankings
+    var sorted = records.slice().sort(function(a,b){return(b.score||0)-(a.score||0);});
+    var rankHtml = '';
+    sorted.forEach(function(r,i){
+        var s=r.score||0, sc=s>=60?'good':'ok';
+        rankHtml+='<div class="rank-row"><div class="rank-pos '+(i===0?'gold':i===1?'silver':i===2?'bronze':'')+'">'+(i<=2?['🥇','🥈','🥉'][i]:i+1)+'</div><div class="rank-info"><div class="rank-name">'+(r.name||'?')+'</div><div class="rank-meta">'+(r.company||'')+' · '+(r.project||'')+' | '+(r.time||'')+'</div></div><div class="rank-score '+sc+'">'+s+'分</div></div>';
+    });
+    document.getElementById('admin-ranking').innerHTML=rankHtml||'<p style="color:var(--text2);text-align:center;padding:20px;">暂无数据</p>';
 }
 
 function sendToAPI(record, details) {
