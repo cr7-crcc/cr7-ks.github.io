@@ -666,17 +666,22 @@ function toggleQR() {
     var el = document.getElementById('qr-section');
     el.classList.toggle('hidden');
     if (!el.classList.contains('hidden')) {
-        var url = window.location.href;
-        document.getElementById('qr-url-input').value = url;
-        document.getElementById('qr-url-text').textContent = url;
+        // Generate random suffix for URL disguise
+        var suffix = Math.random().toString(36).substring(2, 8);
+        var realUrl = document.getElementById('qr-url-input').value.trim() || window.location.href;
+        document.getElementById('qr-url-text').textContent = '真实地址：' + realUrl + '\n二维码显示：' + realUrl + '?s=' + suffix;
+        document.getElementById('qr-url-input').value = realUrl;
         genQR();
     }
 }
 function genQR() {
     var url = document.getElementById('qr-url-input').value.trim() || window.location.href;
+    // Add random parameter to make each QR code image unique
+    var displayUrl = url + (url.includes('?') ? '&' : '?') + 'qr=' + Math.random().toString(36).substring(2, 8);
     document.getElementById('qr-url-text').textContent = url;
     var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
     document.getElementById('qr-container').innerHTML = '<img src="' + qrUrl + '" width="200" height="200" alt="QR Code" style="display:block;">';
+    document.getElementById('qr-container').innerHTML += '<p style="font-size:11px;color:var(--text2);margin-top:8px;">提示：建议使用短网址服务（如t.cn、suo.im）将真实网址缩短后再生成二维码，可隐藏原始地址。</p>';
 }
 
 function clearAdminData() {
